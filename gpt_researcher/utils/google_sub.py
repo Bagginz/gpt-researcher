@@ -62,7 +62,7 @@ class SubscribeManager:
         # add customized JSON config file path here
         config_path = None
         # run agent
-        researcher = GPTResearcher(task, report_type, config_path, websocket, message_type, user_id)
+        researcher = GPTResearcher(query=task, report_type=report_type, source_urls=None, config_path=config_path, websocket=websocket, message_type=message_type, user_id=user_id)
         report = await researcher.run(message_type, user_id)
         # measure time
         end_time = datetime.datetime.now()

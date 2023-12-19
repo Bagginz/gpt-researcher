@@ -30,5 +30,5 @@ class PublishManager:
         # Publish a message to the topic
         future = self.publisher.publish(topic_path, data=json_string.encode('UTF-8'))
         # Wait for the message to be published
-        future.result()
-        print(f"Published message: {message_data}")
+        message_id = future.result()
+        print(f"Published message: {message_id}")

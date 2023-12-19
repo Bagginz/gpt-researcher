@@ -52,10 +52,10 @@ class GPTResearcher:
         # Write Research Report
         if self.report_type == "custom_report":
             self.role = self.cfg.agent_role if self.cfg.agent_role else self.role
-        await stream_output("logs", f"✍️ Writing {self.report_type} for research task: {self.query}...", self.websocket)
+        await stream_output("logs", f"✍️ Writing {self.report_type} for research task: {self.query}...", self.websocket, self.message_type, self.user_id)
         report = await generate_report(query=self.query, context=self.context,
                                        agent_role_prompt=self.role, report_type=self.report_type,
-                                       websocket=self.websocket, cfg=self.cfg)
+                                       websocket=self.websocket, cfg=self.cfg, message_type=self.message_type, user_id=self.user_id)
         time.sleep(2)
         return report
 
@@ -66,7 +66,7 @@ class GPTResearcher:
         new_search_urls = await self.get_new_urls(urls)
         await stream_output("logs",
                             f"🧠 I will conduct my research based on the following urls: {new_search_urls}...",
-                            self.websocket)
+                            self.websocket, self.message_type, self.user_id)
         scraped_sites = scrape_urls(new_search_urls, self.cfg)
         return await self.get_similar_content_by_query(self.query, scraped_sites)
 
@@ -88,7 +88,7 @@ class GPTResearcher:
             await stream_output("logs", f"\n🔎 Running research for '{sub_query}'...", self.websocket, self.message_type, self.user_id)
             scraped_sites = await self.scrape_sites_by_query(sub_query)
             content = await self.get_similar_content_by_query(sub_query, scraped_sites)
-            await stream_output("logs", f"📃 {content}", self.websocket)
+            await stream_output("logs", f"📃 {content}", self.websocket, self.message_type, self.user_id)
             context.append(content)
 
         return context
