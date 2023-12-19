@@ -1,10 +1,10 @@
 version: '3'
 services:
   gpt-researcher:
-    image: assafelovic/gpt-researcher
-    build: ./
+    image: itopplus/gpt-researcher:1.1
+    restart: always
+    ports:
+      - 8000:8000
     environment: 
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       TAVILY_API_KEY: ${TAVILY_API_KEY}
-    ports:
-      - 8000:8000

@@ -2,6 +2,7 @@ import asyncio
 from gpt_researcher.utils.llm import *
 from gpt_researcher.scraper import Scraper
 from gpt_researcher.master.prompts import *
+from gpt_researcher.utils.google_pub import PublishManager
 import json
 
 
@@ -45,7 +46,7 @@ def get_retriever(retriever):
     return retriever
 
 
-async def choose_agent(query, cfg):
+async def choose_agent(query, cfg, message_type=None, user_id=None):
     """
     Chooses the agent automatically
     Args:
@@ -63,7 +64,9 @@ async def choose_agent(query, cfg):
                 {"role": "system", "content": f"{auto_agent_instructions()}"},
                 {"role": "user", "content": f"task: {query}"}],
             temperature=0,
-            llm_provider=cfg.llm_provider
+            llm_provider=cfg.llm_provider,
+            message_type=message_type,
+            user_id=user_id
         )
         agent_dict = json.loads(response)
         return agent_dict["server"], agent_dict["agent_role_prompt"]
@@ -71,7 +74,7 @@ async def choose_agent(query, cfg):
         return "Default Agent", "You are an AI critical thinker research assistant. Your sole purpose is to write well written, critically acclaimed, objective and structured reports on given text."
 
 
-async def get_sub_queries(query, agent_role_prompt, cfg):
+async def get_sub_queries(query, agent_role_prompt, cfg, message_type=None, user_id=None):
     """
     Gets the sub queries
     Args:
@@ -90,7 +93,9 @@ async def get_sub_queries(query, agent_role_prompt, cfg):
             {"role": "system", "content": f"{agent_role_prompt}"},
             {"role": "user", "content": generate_search_queries_prompt(query, max_iterations=max_research_iterations)}],
         temperature=0,
-        llm_provider=cfg.llm_provider
+        llm_provider=cfg.llm_provider,
+        message_type=message_type,
+        user_id=user_id
     )
     sub_queries = json.loads(response)
     return sub_queries
@@ -116,7 +121,7 @@ def scrape_urls(urls, cfg=None):
     return content
 
 
-async def summarize(query, content, agent_role_prompt, cfg, websocket=None):
+async def summarize(query, content, agent_role_prompt, cfg, websocket=None, message_type=None, user_id=None):
     """
     Asynchronously summarizes a list of URLs.
 
@@ -131,11 +136,11 @@ async def summarize(query, content, agent_role_prompt, cfg, websocket=None):
     """
 
     # Function to handle each summarization task for a chunk
-    async def handle_task(url, chunk):
+    async def handle_task(url, chunk, message_type=None, user_id=None):
         summary = await summarize_url(query, chunk, agent_role_prompt, cfg)
         if summary:
-            await stream_output("logs", f"🌐 Summarizing url: {url}", websocket)
-            await stream_output("logs", f"📃 {summary}", websocket)
+            await stream_output("logs", f"🌐 Summarizing url: {url}", websocket, message_type, user_id)
+            await stream_output("logs", f"📃 {summary}", websocket, message_type, user_id)
         return url, summary
 
     # Function to split raw content into chunks of 10,000 words
@@ -151,7 +156,7 @@ async def summarize(query, content, agent_role_prompt, cfg, websocket=None):
         raw_content = item['raw_content']
 
         # Create tasks for all chunks of the current URL
-        chunk_tasks = [handle_task(url, chunk) for chunk in chunk_content(raw_content)]
+        chunk_tasks = [handle_task(url, chunk, message_type, user_id) for chunk in chunk_content(raw_content)]
 
         # Run chunk tasks concurrently
         chunk_summaries = await asyncio.gather(*chunk_tasks)
@@ -164,7 +169,7 @@ async def summarize(query, content, agent_role_prompt, cfg, websocket=None):
     return concatenated_summaries
 
 
-async def summarize_url(query, raw_data, agent_role_prompt, cfg):
+async def summarize_url(query, raw_data, agent_role_prompt, cfg, message_type=None, user_id=None):
     """
     Summarizes the text
     Args:
@@ -185,7 +190,9 @@ async def summarize_url(query, raw_data, agent_role_prompt, cfg):
                 {"role": "system", "content": f"{agent_role_prompt}"},
                 {"role": "user", "content": f"{generate_summary_prompt(query, raw_data)}"}],
             temperature=0,
-            llm_provider=cfg.llm_provider
+            llm_provider=cfg.llm_provider,
+            message_type=message_type,
+            user_id=user_id
         )
     except Exception as e:
         print(f"{Fore.RED}Error in summarize: {e}{Style.RESET_ALL}")
@@ -193,7 +200,7 @@ async def summarize_url(query, raw_data, agent_role_prompt, cfg):
 
 
 
-async def generate_report(query, context, agent_role_prompt, report_type, websocket, cfg):
+async def generate_report(query, context, agent_role_prompt, report_type, websocket, cfg, message_type=None, user_id=None):
     """
     generates the final report
     Args:
@@ -220,7 +227,8 @@ async def generate_report(query, context, agent_role_prompt, report_type, websoc
             llm_provider=cfg.llm_provider,
             stream=True,
             websocket=websocket,
-            max_tokens=cfg.smart_token_limit
+            message_type=message_type,
+            user_id=user_id
         )
     except Exception as e:
         print(f"{Fore.RED}Error in generate_report: {e}{Style.RESET_ALL}")
@@ -228,7 +236,7 @@ async def generate_report(query, context, agent_role_prompt, report_type, websoc
     return report
 
 
-async def stream_output(type, output, websocket=None, logging=True):
+async def stream_output(type, output, websocket=None, message_type=None, user_id=None, logging=True):
     """
     Streams output to the websocket
     Args:
@@ -243,3 +251,8 @@ async def stream_output(type, output, websocket=None, logging=True):
 
     if websocket:
         await websocket.send_json({"type": type, "output": output})
+
+    if not websocket:
+        publish_manager = PublishManager()
+        publish_manager.publish_message({"type": type, "output": output, "message_type": message_type, "user_id": user_id })
+

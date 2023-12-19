@@ -7,6 +7,7 @@ from colorama import Fore, Style
 from typing import Optional
 
 from gpt_researcher.master.prompts import auto_agent_instructions
+from gpt_researcher.utils.google_pub import PublishManager
 
 
 async def create_chat_completion(
@@ -17,6 +18,8 @@ async def create_chat_completion(
         llm_provider: Optional[str] = None,
         stream: Optional[bool] = False,
         websocket: WebSocket | None = None,
+        message_type: Optional[str] = None,
+        user_id: Optional[int] = None,
 ) -> str:
     """Create a chat completion using the OpenAI API
     Args:
@@ -40,7 +43,7 @@ async def create_chat_completion(
     # create response
     for attempt in range(10):  # maximum of 10 attempts
         response = await send_chat_completion_request(
-            messages, model, temperature, max_tokens, stream, llm_provider, websocket
+            messages, model, temperature, max_tokens, stream, llm_provider, websocket, message_type, user_id
         )
         return response
 
@@ -52,7 +55,7 @@ import logging
 
 
 async def send_chat_completion_request(
-        messages, model, temperature, max_tokens, stream, llm_provider, websocket
+        messages, model, temperature, max_tokens, stream, llm_provider, websocket, message_type=None, user_id=None
 ):
     if not stream:
         result = lc_openai.ChatCompletion.create(
@@ -64,10 +67,10 @@ async def send_chat_completion_request(
         )
         return result["choices"][0]["message"]["content"]
     else:
-        return await stream_response(model, messages, temperature, max_tokens, llm_provider, websocket)
+        return await stream_response(model, messages, temperature, max_tokens, llm_provider, websocket, message_type, user_id)
 
 
-async def stream_response(model, messages, temperature, max_tokens, llm_provider, websocket=None):
+async def stream_response(model, messages, temperature, max_tokens, llm_provider, websocket=None, message_type=None, user_id=None):
     paragraph = ""
     response = ""
 
@@ -86,13 +89,16 @@ async def stream_response(model, messages, temperature, max_tokens, llm_provider
             if "\n" in paragraph:
                 if websocket is not None:
                     await websocket.send_json({"type": "report", "output": paragraph})
+                elif message_type is not None and user_id is not None:
+                    publish_manager = PublishManager()
+                    publish_manager.publish_message({"type": "report", "output": paragraph, "message_type": message_type, "user_id": user_id})
                 else:
                     print(f"{Fore.GREEN}{paragraph}{Style.RESET_ALL}")
                 paragraph = ""
     return response
 
 
-def choose_agent(smart_llm_model: str, llm_provider: str, task: str) -> dict:
+def choose_agent(smart_llm_model: str, llm_provider: str, task: str, message_type=None, user_id=None) -> dict:
     """Determines what server should be used
     Args:
         task (str): The research question the user asked
@@ -109,7 +115,9 @@ def choose_agent(smart_llm_model: str, llm_provider: str, task: str) -> dict:
                 {"role": "system", "content": f"{auto_agent_instructions()}"},
                 {"role": "user", "content": f"task: {task}"}],
             temperature=0,
-            llm_provider=llm_provider
+            llm_provider=llm_provider,
+            message_type=message_type,
+            user_id=user_id
         )
         agent_dict = json.loads(response)
         print(f"Agent: {agent_dict.get('server')}")

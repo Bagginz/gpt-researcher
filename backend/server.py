@@ -2,9 +2,11 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+import asyncio
 import json
 import os
 from gpt_researcher.utils.websocket_manager import WebSocketManager
+from gpt_researcher.utils.google_sub import SubscribeManager
 from .utils import write_md_to_pdf
 
 
@@ -22,11 +24,14 @@ app.mount("/static", StaticFiles(directory="./frontend/static"), name="static")
 templates = Jinja2Templates(directory="./frontend")
 
 manager = WebSocketManager()
-
-
+subscribe_manager = SubscribeManager()
+async def start_pubsub_subscriber():
+    await subscribe_manager.start_subscriber()
+    
 # Dynamic directory for outputs once first research is run
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
+    await start_pubsub_subscriber()
     if not os.path.isdir("outputs"):
         os.makedirs("outputs")
     app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
@@ -35,9 +40,8 @@ def startup_event():
 async def read_root(request: Request):
     return templates.TemplateResponse('index.html', {"request": request, "report": None})
 
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: int):
     await manager.connect(websocket)
     try:
         while True:
@@ -55,4 +59,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
-
+        await websocket.send_json({"type": "error", "output": 'Error: Websocket disconnected.'})

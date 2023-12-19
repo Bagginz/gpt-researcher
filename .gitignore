@@ -16,3 +16,4 @@ node_modules
 .docusaurus
 build
 docs/build
+gpt_researcher/config/AUTH.json
