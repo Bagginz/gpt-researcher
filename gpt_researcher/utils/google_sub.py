@@ -10,28 +10,27 @@ import os
 import json
 
 # Set the Google Cloud project and Pub/Sub topic
-project_id = "clean-silo-630"
-sub_topic_name = "internal-researcher-local"
-pub_topic_name = "internal-gateway-local2"
-auth_file = 'gpt_researcher/config/AUTH.json'
 publish_manager = PublishManager()
 
 class SubscribeManager:
     """Manage Google PubSub"""
     def __init__(self):
         """Initialize the Google PubSub class."""
-        credentials = service_account.Credentials.from_service_account_file(auth_file)
-        self.subscriber = pubsub_v1.SubscriberClient(credentials=credentials)
+        self.subscriber = None
+        self.secret_key = None
+        self.sub_topic_name = None
+        self.project_id = None
+        self.auth_file = None
+
 
     def callback(self, message):
         print(f"Received message ID: {message.message_id}.")
         data = message.data.decode('utf-8')
-        secret_key = os.environ["INTERNAL_SECERT_KEY"]
         json_data = json.loads(data)
         payload = json_data.get("message")
         message_type = json_data.get("message_type")
         try:
-            decoded_payload = jwt.decode(payload, secret_key, algorithms='HS256')
+            decoded_payload = jwt.decode(payload, self.secret_key, algorithms='HS256')
             task = decoded_payload.get("task")
             report_type = decoded_payload.get("report_type")
             user_id = decoded_payload.get("user_id")
@@ -48,12 +47,18 @@ class SubscribeManager:
 
     async def start_subscriber(self):
         """Start the subscriber task."""
-        # credentials = service_account.Credentials.from_service_account_file(auth_file)
-        subscription_path = self.subscriber.subscription_path(project_id, sub_topic_name)
-        subscriber = self.subscriber
+        self.secret_key = os.environ.get("JWT_SECERT_KEY", None)
+        self.sub_topic_name = os.environ.get("SUB_TOPIC", None)
+        self.project_id = os.environ.get("PROJECT_ID", None)
+        self.auth_file = os.environ.get("AUTH_JSON", None)
+
+        credentials = service_account.Credentials.from_service_account_file(self.auth_file)
+        self.subscriber = pubsub_v1.SubscriberClient(credentials=credentials)
+        # Define the subscription path
+        subscription_path = self.subscriber.subscription_path(self.project_id, self.sub_topic_name)
         flow_control = pubsub_v1.types.FlowControl(max_messages=5)
-        subscriber.subscribe(subscription_path, callback=self.callback, flow_control=flow_control)
-        print(f"Listening for messages on {sub_topic_name}...")
+        self.subscriber.subscribe(subscription_path, callback=self.callback, flow_control=flow_control)
+        print(f"Listening for messages on {self.sub_topic_name}...")
 
     async def run_agent(self, task, report_type, websocket, message_type, user_id):
         """Run the agent."""
