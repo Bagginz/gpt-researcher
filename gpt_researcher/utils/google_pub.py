@@ -12,13 +12,13 @@ class PublishManager:
 
     def publish_message(self, message_data):
         """Publish a message to the topic."""
-        secret_key = os.environ.get("JWT_SECERT_KEY", None)
+        secret_key = os.environ.get("JWT_SECRET_KEY", None)
         pub_topic_name = os.environ.get("PUB_TOPIC", None)
         project_id = os.environ.get("PROJECT_ID", None)
         auth_file = os.environ.get("AUTH_JSON", None)
 
         if not secret_key or not pub_topic_name or not project_id or not auth_file:
-            raise Exception("JWT_SECERT_KEY not set.")
+            raise Exception("JWT_SECRET_KEY not set.")
 
         credentials = service_account.Credentials.from_service_account_file(auth_file)
         self.publisher = pubsub_v1.PublisherClient(credentials=credentials)

@@ -233,10 +233,11 @@ async def generate_report(query, context, agent_role_prompt, report_type, websoc
             message_type=message_type,
             user_id=user_id
         )
+        return report
     except Exception as e:
         print(f"{Fore.RED}Error in generate_report: {e}{Style.RESET_ALL}")
+        return f"Error in generate_report: {e}{Style.RESET_ALL}"
 
-    return report
 
 
 async def stream_output(type, output, websocket=None, message_type=None, user_id=None, logging=True):

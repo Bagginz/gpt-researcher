@@ -36,7 +36,6 @@ class SubscribeManager:
             user_id = decoded_payload.get("user_id")
             if task and report_type:
                 asyncio.run(self.handle_researcher(message, task, report_type, message_type, user_id))
-                message.ack()
             else:
                 print("Error: not enough parameters provided.")
                 message.ack()
@@ -47,7 +46,7 @@ class SubscribeManager:
 
     async def start_subscriber(self):
         """Start the subscriber task."""
-        self.secret_key = os.environ.get("JWT_SECERT_KEY", None)
+        self.secret_key = os.environ.get("JWT_SECRET_KEY", None)
         self.sub_topic_name = os.environ.get("SUB_TOPIC", None)
         self.project_id = os.environ.get("PROJECT_ID", None)
         self.auth_file = os.environ.get("AUTH_JSON", None)
@@ -76,7 +75,11 @@ class SubscribeManager:
 
     async def handle_researcher(self, message, task, report_type, message_type, user_id):
         report = await self.run_agent(task, report_type, None, message_type, user_id)
-        path = await write_md_to_pdf(report)
-        publish_manager.publish_message({"type": "path", "output": path, "message_type": message_type, "user_id": user_id})
+        if "Error in generate_report:" in report:
+            publish_manager.publish_message({"type": "error", "output": report, "message_type": message_type, "user_id": user_id})
+        else:
+            path = await write_md_to_pdf(report)
+            publish_manager.publish_message({"type": "path", "output": path, "message_type": message_type, "user_id": user_id})
+            
         message.ack()
         return 'true'
